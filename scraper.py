@@ -3,30 +3,42 @@ from bs4 import BeautifulSoup
 import json
 import time
 
-driver = webdriver.Chrome()
 
-url = "https://www.indeed.com/viewjob?jk=b1c329181eab855c&from=shareddesktop_copy"
-driver.get(url)
-
-time.sleep(3)
-
-soup = BeautifulSoup(driver.page_source, "html.parser")
-
-scripts = soup.find_all("script", type="application/ld+json")
-
-for script in scripts:
+def scrape_job(url):
+    driver = webdriver.Chrome()
     try:
-        data = json.loads(script.string)
+        driver.get(url)
+        time.sleep(3)
 
-        if isinstance(data, dict) and data.get("@type") == "JobPosting":
-            print("Date Posted:", data["datePosted"])
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        scripts = soup.find_all("script", type="application/ld+json")
 
-        elif isinstance(data, list):
-            for item in data:
-                if item.get("@type") == "JobPosting":
-                    print("Date Posted:", item["datePosted"])
+        result = {
+            "Link": url,
+            "daysSince": None,
+            "jobDescriptionLength": 0,
+        }
 
-    except:
-        pass
+        description = soup.get_text(" ", strip=True)
+        result["jobDescriptionLength"] = len(description)
 
-driver.quit()
+        for script in scripts:
+            try:
+                payload = json.loads(script.string)
+            except Exception:
+                continue
+
+            postings = payload if isinstance(payload, list) else [payload]
+            for item in postings:
+                if isinstance(item, dict) and item.get("@type") == "JobPosting":
+                    result["datePosted"] = item.get("datePosted")
+                    return result
+
+        return result
+    finally:
+        driver.quit()
+
+
+if __name__ == "__main__":
+    sample_url = "https://www.indeed.com/viewjob?jk=b1c329181eab855c&from=shareddesktop_copy"
+    print(scrape_job(sample_url))
